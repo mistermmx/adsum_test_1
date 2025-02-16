@@ -1,3 +1,19 @@
+"""
+This script defines an Apache Airflow DAG for a financial data pipeline.
+The pipeline fetches financial data from an external source (Google Drive),
+processes and normalizes it in-memory using pandas, and loads it into a PostgreSQL database.
+Sensitive credentials are encrypted and managed securely via AWS Secrets Manager and 
+Fernet encryption to ensure data protection during processing. The DAG includes tasks for:
+
+1. Fetching database credentials from AWS Secrets Manager.
+2. Creating a table in a PostgreSQL database for storing transactions.
+3. Fetching and loading raw financial data from Google Drive.
+4. Cleaning and transforming financial data, including removing duplicates.
+5. Comparing and appending only new records to the target database table.
+
+The pipeline is automated to run daily at midnight and is designed to handle encrypted data securely
+throughout the process.
+"""
 import base64
 import json
 
@@ -14,6 +30,18 @@ from sqlalchemy import create_engine
 
 # Constants
 GOOGLE_DRIVE_BASE_URL = r'https://drive.google.com/uc?id='
+AWS_REGION = "us-west-2"
+SECRET_NAME = "adsum_db_credentials_2"
+TRANSACTION_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS transactions (
+    id SERIAL PRIMARY KEY,
+    transaction_id VARCHAR(50) UNIQUE NOT NULL,
+    user_id INT NOT NULL,
+    amount FLOAT NOT NULL,
+    transaction_date DATE NOT NULL
+);
+"""
+
 
 
 def encrypt_data(data: str) -> str:
@@ -78,7 +106,9 @@ def convert_to_float(dataframe):
 
 def normalize_dates(dataframe):
     """Normalizes the 'transaction_date' column to date format (YYYY-MM-DD)."""
-    dataframe['transaction_date'] = pd.to_datetime(dataframe['transaction_date'], format='mixed', dayfirst=True,
+    dataframe['transaction_date'] = pd.to_datetime(dataframe['transaction_date'],
+                                                   format='mixed',
+                                                   dayfirst=True,
                                                    errors='raise').dt.strftime('%Y-%m-%d')
     return dataframe
 
@@ -89,22 +119,14 @@ def remove_duplicate_transactions(dataframe):
 
 
 # Task Functions
-def create_table(**context):
-    sql_query = """
-    CREATE TABLE IF NOT EXISTS transactions (
-        id SERIAL PRIMARY KEY,
-        transaction_id VARCHAR(50) UNIQUE NOT NULL,
-        user_id INT NOT NULL,
-        amount FLOAT NOT NULL,
-        transaction_date DATE NOT NULL
-    );
-    """
+def create_transaction_table(**context):
+    """Creates the `transactions` table in the PostgreSQL database."""
     encrypted_connection_params = context['ti'].xcom_pull(key='connection_params')
     decrypted_connection_params = decrypt_data(encrypted_connection_params)
     connection_params = json.loads(decrypted_connection_params)
     with psycopg2.connect(**connection_params) as connection:
         with connection.cursor() as cursor:
-            cursor.execute(sql_query)
+            cursor.execute(TRANSACTION_TABLE_SQL)
             connection.commit()
 
 
@@ -146,7 +168,8 @@ def transform_financial_data(**context):
 
 def fetch_sql_transactions(**context):
     """
-    Fetch records from PostgreSQL and load into a pandas DataFrame, then subtract those SQL records from the new data.
+    Fetch records from PostgreSQL and load into a pandas DataFrame.
+    Then subtract those SQL records from the new data.
     This way we only ever add new data to the SQL table.
     :param context:
     :return:
@@ -154,7 +177,9 @@ def fetch_sql_transactions(**context):
     decrypted_dataframe = decrypt_data(context['ti'].xcom_pull(key='transformed_dataframe'))
     transformed_dataframe = pd.read_json(decrypted_dataframe)
     connection_params = json.loads(decrypt_data(context['ti'].xcom_pull(key='connection_params')))
-    con_str = f'postgresql://{connection_params["user"]}:{connection_params["password"]}@{connection_params["host"]}:{connection_params["port"]}/{connection_params["dbname"]}'
+    con_str = (f'postgresql://{connection_params["user"]}:{connection_params["password"]}'
+               f'@{connection_params["host"]}:{connection_params["port"]}'
+               f'/{connection_params["dbname"]}')
     engine = create_engine(con_str)
     sql_query = """SELECT transaction_id,
                           user_id,
@@ -178,7 +203,9 @@ def load_data(**context):
     decrypted_data = decrypt_data(context['ti'].xcom_pull(key='transformed_dataframe'))
     dataframe = pd.read_json(decrypted_data)
     connection_params = json.loads(decrypt_data(context['ti'].xcom_pull(key='connection_params')))
-    con_str = f'postgresql://{connection_params["user"]}:{connection_params["password"]}@{connection_params["host"]}:{connection_params["port"]}/{connection_params["dbname"]}'
+    con_str = (f'postgresql://{connection_params["user"]}:{connection_params["password"]}'
+               f'@{connection_params["host"]}:{connection_params["port"]}'
+               f'/{connection_params["dbname"]}')
     engine = create_engine(con_str)
     dataframe.to_sql('transactions', engine, if_exists="append", index=False)
 
@@ -206,21 +233,21 @@ get_connection_params_task = PythonOperator(
 )
 
 create_table_task = PythonOperator(
-    task_id='create_table',
-    python_callable=create_table,
+    task_id='create_transaction_table',
+    python_callable=create_transaction_table,
     provide_context=True,
     dag=dag,
 )
 
 fetch_data_task = PythonOperator(
-    task_id='fetch_data',
+    task_id='fetch_financial_data',
     python_callable=fetch_financial_data,
     provide_context=True,
     dag=dag,
 )
 
 transform_data_task = PythonOperator(
-    task_id='transform_data',
+    task_id='transform_financial_data',
     python_callable=transform_financial_data,
     provide_context=True,
     dag=dag,
@@ -241,4 +268,12 @@ load_data_task = PythonOperator(
 )
 
 # Task Dependencies
-get_connection_params_task >> create_table_task >> fetch_data_task >> transform_data_task >> fetch_sql_transactions_task >> load_data_task
+# pylint: disable-msg=W0104
+(
+        get_connection_params_task
+        >> create_table_task
+        >> fetch_data_task
+        >> transform_data_task
+        >> fetch_sql_transactions_task
+        >> load_data_task
+)
