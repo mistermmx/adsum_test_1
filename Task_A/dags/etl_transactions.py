@@ -1,16 +1,16 @@
-from airflow import DAG
-from airflow.operators.python import PythonOperator
-from airflow.utils.dates import days_ago
+import base64
+import json
+
+import boto3
 import pandas as pd
 import psycopg2
-from sqlalchemy import create_engine
-import boto3
-from botocore.exceptions import ClientError
-import json
-from cryptography.fernet import Fernet
-import base64
-import os
+from airflow import DAG
 from airflow.models import Variable
+from airflow.operators.python import PythonOperator
+from airflow.utils.dates import days_ago
+from botocore.exceptions import ClientError
+from cryptography.fernet import Fernet
+from sqlalchemy import create_engine
 
 # Constants
 GOOGLE_DRIVE_BASE_URL = r'https://drive.google.com/uc?id='

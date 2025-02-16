@@ -1,3 +1,6 @@
 pandas >= 2.2.3
 psycopg2 >= 2.9.10
 sqlalchemy >= 2.0.38
+apache-airflow >= 2.10.5
+cryptography >= 44.0.1
+boto3 >= 1.36.21
