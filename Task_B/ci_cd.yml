@@ -33,6 +33,7 @@ jobs:
       - name: Lint DAGs with pylint
         run: |
           echo "Linting Airflow DAGs..."
+          echo "find ./Task_A/dags"
           find ./Task_A/dags -name "*.py" | xargs pylint
 
       # Step 4: Validate DAGs using Airflow CLI
