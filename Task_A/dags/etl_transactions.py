@@ -67,7 +67,6 @@ def get_connection_params(**context):
     # Encrypt connection_params before passing through to XCOM
     encrypted_connection_params = encrypt_data(connection_params)
     context['ti'].xcom_push(key='connection_params', value=encrypted_connection_params)
-    return
 
 
 # Utility Functions
