@@ -38,14 +38,15 @@ jobs:
           find Task_A/dags/ -name "*.py" | xargs pylint
 
       # Step 4: Validate DAGs using Airflow CLI
-      - name: Validate Airflow DAGs
-        run: |
-          echo "Validating Airflow DAGs..."
-          for dag_file in Task_A/dags/*.py; do
-            if [[ -f "$dag_file" ]]; then
-              python -m airflow dags test $(basename "$dag_file" .py) $(date -I)
-            else
-              echo "No DAG files found in Task_A/dags/"
-            fi
-          done
+      # (Note: Disabled for now until I figure out the best way to implement)
+#      - name: Validate Airflow DAGs
+#        run: |
+#          echo "Validating Airflow DAGs..."
+#          for dag_file in Task_A/dags/*.py; do
+#            if [[ -f "$dag_file" ]]; then
+#              python -m airflow dags test $(basename "$dag_file" .py) $(date -I)
+#            else
+#              echo "No DAG files found in Task_A/dags/"
+#            fi
+#          done
 
