@@ -31,7 +31,7 @@ from sqlalchemy import create_engine
 # Constants
 GOOGLE_DRIVE_BASE_URL = r'https://drive.google.com/uc?id='
 AWS_REGION = "us-west-2"
-SECRET_NAME = "adsum_db_credentials_2"
+SECRET_NAME = "adsum_aws_db_credentials"
 TRANSACTION_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS transactions (
     id SERIAL PRIMARY KEY,
@@ -41,7 +41,12 @@ CREATE TABLE IF NOT EXISTS transactions (
     transaction_date DATE NOT NULL
 );
 """
-
+SQL_SELECT_QUERY = """SELECT transaction_id,
+                             user_id,
+                             amount,
+                             transaction_date 
+                      FROM transactions
+                      """
 
 
 def encrypt_data(data: str) -> str:
@@ -72,19 +77,16 @@ def get_connection_params(**context):
     """
     Fetch database credentials from AWS Secrets
     """
-    secret_name = "adsum_db_credentials_2"
-    region_name = "us-west-2"
-
     # Create a Secrets Manager client
     session = boto3.session.Session()
     client = session.client(
         service_name='secretsmanager',
-        region_name=region_name
+        region_name=AWS_REGION
     )
 
     try:
         get_secret_value_response = client.get_secret_value(
-            SecretId=secret_name
+            SecretId=SECRET_NAME
         )
     except ClientError as e:
         # For a list of exceptions thrown, see
@@ -181,12 +183,7 @@ def fetch_sql_transactions(**context):
                f'@{connection_params["host"]}:{connection_params["port"]}'
                f'/{connection_params["dbname"]}')
     engine = create_engine(con_str)
-    sql_query = """SELECT transaction_id,
-                          user_id,
-                          amount,
-                          transaction_date 
-                   FROM transactions"""
-    sql_dataframe = pd.read_sql_query(sql_query, engine)
+    sql_dataframe = pd.read_sql_query(SQL_SELECT_QUERY, engine)
     # Ensure transformed_dataframe contains only unique records not present in sql_dataframe
     final_dataframe = transformed_dataframe[
         ~transformed_dataframe['transaction_id'].isin(sql_dataframe['transaction_id'])
@@ -218,7 +215,7 @@ default_args = {
 }
 
 dag = DAG(
-    'financial_data_pipeline_sql_encrypted',
+    'etl_transactions',
     default_args=default_args,
     description='A DAG for fetching, transforming, and loading financial data.',
     schedule_interval='0 0 * * *',

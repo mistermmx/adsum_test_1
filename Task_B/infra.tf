@@ -133,7 +133,7 @@ resource "aws_db_instance" "adsum-test-db-instance" {
 }
 
 resource "aws_secretsmanager_secret" "rds_credentials" {
-  name = "adsum_db_credentials_2"
+  name = "adsum_aws_db_credentials"
 }
 
 # Store the database's credentials on AWS Secrets manager
