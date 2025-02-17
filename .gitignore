@@ -3,5 +3,5 @@ Task_B/.terraform
 Task_B/.terraform.lock.hcl
 Task_B/terraform.tfstate
 Task_B/terraform.tfstate.backup
-.venv
-.idea
+.venv/
+.idea/
