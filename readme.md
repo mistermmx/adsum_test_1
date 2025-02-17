@@ -52,6 +52,8 @@ If your installation was successful, you should see something like this:
  ```
 
 ### 3. Create AWS resources using Terraform
+```Note: You can also watch  "Task_C/Demo Video.mkv" for a demonstration of the below.```
+
 
 Open the ```Task_B``` directory of the project in your terminal.
 
